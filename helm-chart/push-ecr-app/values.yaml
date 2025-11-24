@@ -1,0 +1,19 @@
+replicaCount: 1
+
+image:
+  repository: 200901485389.dkr.ecr.us-east-1.amazonaws.com/vijay_test
+  tag: "latest"           # Jenkins will update this automatically
+  pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer
+  port: 3000
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
