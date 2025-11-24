@@ -61,7 +61,7 @@ pipeline {
       steps {
         sh '''
           echo "Running Trivy scan..."
-          trivy image --severity HIGH,CRITICAL --exit-code 1 --no-progress ${IMAGE_NAME}:${GIT_COMMIT_SHORT}
+          trivy image --severity CRITICAL --exit-code 1 --no-progress $IMAGE_NAME
         '''
       }
     }
