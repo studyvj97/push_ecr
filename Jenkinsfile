@@ -1,16 +1,22 @@
 pipeline {
   agent any
 
+  parameters {
+    choice(
+      name: 'ENV',
+      choices: ['dev', 'stage', 'prod'],
+      description: 'Choose environment to deploy'
+    )
+  }
+
   environment {
     AWS_REGION = "us-east-1"
     ECR_REPO   = "vijay_test"
-    HELM_BRANCH = "helm"
-    HELM_CHART_PATH = "helm-chart/push-ecr-app"   // CORRECT PATH
   }
 
   stages {
 
-    stage('Checkout Code') {
+    stage('Checkout') {
       steps {
         checkout scm
       }
@@ -19,19 +25,39 @@ pipeline {
     stage('Prepare Environment') {
       steps {
         script {
+
+          // Get AWS account ID
           env.ECR_ACCOUNT_ID = sh(
             script: "aws sts get-caller-identity --query Account --output text",
             returnStdout: true
           ).trim()
 
+          // Construct ECR image name
           env.IMAGE_NAME = "${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
 
+          // Short commit tag
           env.GIT_COMMIT_SHORT = sh(
             script: "git rev-parse --short HEAD",
             returnStdout: true
           ).trim()
 
-          echo "Building image: ${IMAGE_NAME}:${GIT_COMMIT_SHORT}"
+          // Pick branch based on ENV
+          if (params.ENV == "dev") {
+            env.HELM_BRANCH = "helm/dev"
+            env.HELM_VALUES_FILE = "helm-chart/push-ecr-app/values-dev.yaml"
+          }
+          if (params.ENV == "stage") {
+            env.HELM_BRANCH = "helm/stage"
+            env.HELM_VALUES_FILE = "helm-chart/push-ecr-app/values-stage.yaml"
+          }
+          if (params.ENV == "prod") {
+            env.HELM_BRANCH = "helm/prod"
+            env.HELM_VALUES_FILE = "helm-chart/push-ecr-app/values-prod.yaml"
+          }
+
+          echo "Deploying to ENV = ${params.ENV}"
+          echo "Using HELM BRANCH = ${env.HELM_BRANCH}"
+          echo "Values file = ${env.HELM_VALUES_FILE}"
         }
       }
     }
@@ -40,7 +66,7 @@ pipeline {
       steps {
         sh '''
           aws ecr get-login-password --region $AWS_REGION \
-            | docker login --username AWS --password-stdin ${IMAGE_NAME%/*}
+          | docker login --username AWS --password-stdin ${IMAGE_NAME%/*}
         '''
       }
     }
@@ -48,76 +74,60 @@ pipeline {
     stage('Build Docker Image') {
       steps {
         sh '''
+          echo "Building Docker image..."
           docker build -t ${IMAGE_NAME}:${GIT_COMMIT_SHORT} .
         '''
       }
     }
 
-    stage('Trivy Scan') {
+    stage('Security Scan - Trivy') {
       steps {
         sh '''
+          echo "Running Trivy scan..."
           trivy image --severity CRITICAL --exit-code 1 --no-progress ${IMAGE_NAME}:${GIT_COMMIT_SHORT}
         '''
       }
     }
 
-    stage('Push to ECR') {
+    stage('Push Image to ECR') {
       steps {
         sh '''
-          docker tag ${IMAGE_NAME}:${GIT_COMMIT_SHORT} ${IMAGE_NAME}:latest
+          echo "Pushing image to ECR..."
           docker push ${IMAGE_NAME}:${GIT_COMMIT_SHORT}
-          docker push ${IMAGE_NAME}:latest
         '''
       }
     }
 
-    stage('Update Helm Chart Image Tag (GitOps)') {
+    stage('Update Helm Chart Values File') {
       steps {
-        withCredentials([usernamePassword(credentialsId: 'github-creds', usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
+        withCredentials([usernamePassword(credentialsId: 'github-creds', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
 
           sh '''
-            echo "Fetching helm branch..."
-            git fetch origin
+            echo "Updating Helm values file: $HELM_VALUES_FILE"
+            sed -i "s/tag:.*/tag: \\"${GIT_COMMIT_SHORT}\\"/" $HELM_VALUES_FILE
 
-            echo "Switching to helm branch..."
-            git checkout $HELM_BRANCH
-            git pull origin $HELM_BRANCH
-
-            echo "Updating image tag in values.yaml..."
-            sed -i "s/tag: .*/tag: \\"${GIT_COMMIT_SHORT}\\"/" ${HELM_CHART_PATH}/values.yaml
-
-            git config user.email "jenkins@example.com"
+            git config user.email "jenkins@automation.com"
             git config user.name "Jenkins"
 
-            git add ${HELM_CHART_PATH}/values.yaml
-            git commit -m "Update image tag to ${GIT_COMMIT_SHORT}" || echo "No changes"
+            git add $HELM_VALUES_FILE
+            git commit -m "CI: Updated ${ENV} image tag to ${GIT_COMMIT_SHORT}"
 
-            echo "Updating Git remote URL with credentials..."
-            git remote set-url origin https://$GIT_USERNAME:$GIT_PASSWORD@github.com/studyvj97/push_ecr.git
-
-            echo "Pushing updated helm chart..."
-            git push origin $HELM_BRANCH
+            echo "Pushing to branch $HELM_BRANCH"
+            git push https://$GIT_USER:$GIT_PASS@github.com/studyvj97/push_ecr.git HEAD:$HELM_BRANCH
           '''
         }
       }
     }
 
-    stage('Cleanup') {
-      steps {
-        sh '''
-          docker rmi ${IMAGE_NAME}:${GIT_COMMIT_SHORT} || true
-          docker rmi ${IMAGE_NAME}:latest || true
-        '''
-      }
-    }
   }
 
   post {
     success {
-      echo "SUCCESS: New version pushed to ECR and ArgoCD will deploy it!"
+      echo "🚀 SUCCESS: New version deployed to ${params.ENV}"
+      echo "Image Tag: ${GIT_COMMIT_SHORT}"
     }
     failure {
-      echo "FAILED: Check logs."
+      echo "❌ FAILED: Check pipeline logs"
     }
   }
 }
