@@ -17,7 +17,6 @@ pipeline {
     stage('Prepare Environment') {
       steps {
         script {
-
           // Get AWS Account ID dynamically from EC2 IAM role
           env.ECR_ACCOUNT_ID = sh(
             script: "aws sts get-caller-identity --query Account --output text",
@@ -61,7 +60,7 @@ pipeline {
       steps {
         sh '''
           echo "Running Trivy scan..."
-          trivy image --severity CRITICAL --exit-code 1 --no-progress $ECR_REPO:$IMAGE_TAG
+          trivy image --severity CRITICAL --exit-code 1 --no-progress ${IMAGE_NAME}:${GIT_COMMIT_SHORT}
         '''
       }
     }
