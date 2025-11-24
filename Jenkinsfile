@@ -61,7 +61,7 @@ pipeline {
       steps {
         sh '''
           echo "Running Trivy scan..."
-          trivy image --severity CRITICAL --exit-code 1 --no-progress $IMAGE_NAME
+          trivy image --severity CRITICAL --exit-code 1 --no-progress $ECR_REPO:$IMAGE_TAG
         '''
       }
     }
