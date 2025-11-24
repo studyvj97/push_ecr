@@ -1,0 +1,20 @@
+replicaCount: 1
+
+image:
+  repository: ""   # Jenkins will insert
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+httpRoute:
+  enabled: false   # fixes NOTES.txt error
+
+resources: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
