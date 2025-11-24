@@ -12,6 +12,9 @@ service:
 httpRoute:
   enabled: false
 
+ingress:
+  enabled: false 
+
 resources: {}
 
 nodeSelector: {}
