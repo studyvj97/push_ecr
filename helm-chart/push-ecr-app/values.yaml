@@ -1,19 +1,20 @@
 replicaCount: 1
 
 image:
-  repository: 200901485389.dkr.ecr.us-east-1.amazonaws.com/vijay_test
-  tag: "798c941"
+  repository: ""
+  tag: "latest"
   pullPolicy: IfNotPresent
 
 service:
-  type: LoadBalancer
-  port: 3000
+  type: ClusterIP
+  port: 80
+
+httpRoute:
+  enabled: false
 
 resources: {}
 
 nodeSelector: {}
-
 tolerations: []
-
 affinity: {}
 
