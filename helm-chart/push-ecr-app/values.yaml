@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: "200901485389.dkr.ecr.us-east-1.amazonaws.com/vijay_test"
-  tag: "latest"
+  tag: "afdc0c6"
   pullPolicy: IfNotPresent
 
 service:
